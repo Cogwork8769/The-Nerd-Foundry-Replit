@@ -6,14 +6,11 @@ import { shadcn } from '@clerk/themes';
 import {
   ArrowDownRight,
   ArrowRight,
-  BookOpen,
   Check,
   ChevronRight,
-  Compass,
   Gamepad2,
   Hexagon,
   LayoutDashboard,
-  Library,
   LogOut,
   Menu,
   Orbit,
@@ -22,7 +19,6 @@ import {
   Sparkles,
   Swords,
   Terminal,
-  Users,
   X,
   Zap,
 } from 'lucide-react';
@@ -36,6 +32,14 @@ import {
   useLocation,
 } from 'wouter';
 import { ErrorBoundary } from '@/components/error-boundary';
+import {
+  EmptyModuleMark,
+  HorizonModules,
+  MemberSignal,
+  WorkbenchModuleRail,
+  WORKBENCH_MODULES,
+  type WorkbenchModule,
+} from '@/components/workbench-system';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
@@ -317,15 +321,28 @@ function HomeRedirect() {
 
 function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({ disciplines: true, clubhouse: true, future: false });
+  const [notice, setNotice] = useState<string | null>(null);
   const { signOut } = useClerk();
   const { user } = useUser();
-  const [, setLocation] = useLocation();
+  const [location] = useLocation();
   const displayName = user?.firstName || user?.username || 'Member';
-  const nav = [
-    { href: '/dashboard', label: 'Workbench', icon: <LayoutDashboard size={17} /> },
-    { href: '#', label: 'Field notes', icon: <BookOpen size={17} />, soon: true },
-    { href: '#', label: 'Communities', icon: <Users size={17} />, soon: true },
+  const workbench = WORKBENCH_MODULES.find((module) => module.id === 'workbench');
+  const navGroups = [
+    { id: 'disciplines', label: 'Disciplines', modules: WORKBENCH_MODULES.filter((module) => module.group === 'discipline') },
+    { id: 'clubhouse', label: 'Clubhouse', modules: WORKBENCH_MODULES.filter((module) => module.group === 'clubhouse') },
+    { id: 'future', label: 'Future tools', modules: WORKBENCH_MODULES.filter((module) => module.group === 'future') },
   ];
+  const showFutureNotice = (module: WorkbenchModule) => {
+    setNotice(`${module.title} is being forged now. We will share the first signal here.`);
+    setMobileOpen(false);
+  };
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4200);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   return (
     <div className="flex min-h-[100dvh] bg-[#f4f0e8] text-[#182129]">
       <aside className={`fixed inset-y-0 left-0 z-40 flex w-[264px] flex-col bg-[#182129] px-5 py-6 text-[#f4f0e8] transition-transform duration-300 lg:relative lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -333,14 +350,53 @@ function AppShell({ children }: { children: ReactNode }) {
           <Link href="/dashboard" onClick={() => setMobileOpen(false)} data-testid="link-dashboard-brand"><span className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-[#b8d94b] text-[#182129]"><span className="nf-display text-lg font-bold">N</span></span><span className="nf-display text-sm font-bold tracking-[-.04em]">THE NERD<br /><span className="text-[#ff653f]">FOUNDRY</span></span></span></Link>
           <button type="button" className="rounded-md p-1 text-[#9eaaa3] lg:hidden" onClick={() => setMobileOpen(false)} aria-label="Close navigation" data-testid="button-close-navigation"><X size={18} /></button>
         </div>
-        <div className="mt-12 nf-mono text-[9px] uppercase tracking-[.18em] text-[#75837a]">Your clubhouse</div>
+        <div className="mt-10 flex items-center justify-between nf-mono text-[9px] uppercase tracking-[.18em] text-[#75837a]">
+          <span>Your clubhouse</span>
+          <span className="text-[#52635b]">member os</span>
+        </div>
         <nav className="mt-3 grid gap-1" aria-label="Member navigation">
-          {nav.map((item) => item.soon ? (
-            <button type="button" key={item.label} onClick={() => window.alert(`${item.label} are being forged now.`)} className="group flex items-center justify-between rounded-lg px-3 py-3 text-left text-sm font-medium text-[#8f9b94] transition-colors hover:bg-[#222e32] hover:text-[#f4f0e8]" data-testid={`button-nav-${item.label.toLowerCase().replace(' ', '-')}`}>
-              <span className="flex items-center gap-3">{item.icon}{item.label}</span><span className="nf-mono text-[8px] uppercase tracking-[.1em] text-[#ff653f]">soon</span>
-            </button>
-          ) : (
-            <Link href={item.href} key={item.label} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 rounded-lg bg-[#273338] px-3 py-3 text-sm font-bold text-[#f4f0e8] shadow-[inset_3px_0_#ff653f]`} data-testid="link-nav-workbench">{item.icon}{item.label}</Link>
+          {workbench && (
+            <Link
+              href={workbench.href || '/dashboard'}
+              onClick={() => setMobileOpen(false)}
+              className={`flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-bold transition-colors ${location === '/dashboard' ? 'bg-[#273338] text-[#f4f0e8] shadow-[inset_3px_0_#ff653f]' : 'text-[#aebbb1] hover:bg-[#222e32] hover:text-[#f4f0e8]'}`}
+              data-testid="link-nav-workbench"
+            >
+              <LayoutDashboard size={17} /> {workbench.shortTitle}
+            </Link>
+          )}
+          {navGroups.map((group) => (
+            <div key={group.id} className="mt-2">
+              <button
+                type="button"
+                onClick={() => setExpandedGroups((current) => ({ ...current, [group.id]: !current[group.id] }))}
+                className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left nf-mono text-[9px] uppercase tracking-[.14em] text-[#75837a] transition-colors hover:bg-[#222e32] hover:text-[#f4f0e8]"
+                aria-expanded={expandedGroups[group.id]}
+                data-testid={`button-toggle-nav-${group.id}`}
+              >
+                <span>{group.label}</span>
+                <ChevronRight size={13} className={`transition-transform ${expandedGroups[group.id] ? 'rotate-90' : ''}`} />
+              </button>
+              {expandedGroups[group.id] && (
+                <div className="mt-1 grid gap-0.5">
+                  {group.modules.map((module) => {
+                    const Icon = module.icon;
+                    return (
+                      <button
+                        type="button"
+                        key={module.id}
+                        onClick={() => showFutureNotice(module)}
+                        className="group flex items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#8f9b94] transition-colors hover:bg-[#222e32] hover:text-[#f4f0e8]"
+                        data-testid={`button-nav-${module.id}`}
+                      >
+                        <span className="flex items-center gap-3 leading-4"><Icon size={16} />{module.title}</span>
+                        <span className="nf-mono text-[8px] uppercase tracking-[.1em] text-[#ff653f]">soon</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
         <div className="mt-auto rounded-2xl border border-[#364449] bg-[#202c30] p-4">
@@ -360,6 +416,15 @@ function AppShell({ children }: { children: ReactNode }) {
             <Link href="/settings" className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-[#182129] bg-[#b8d94b] text-xs font-bold transition-transform hover:rotate-6" data-testid="link-account-avatar">{(user?.firstName?.[0] || 'N') + (user?.lastName?.[0] || 'F')}</Link>
           </div>
         </header>
+        {notice && (
+          <div className="pointer-events-none fixed bottom-5 left-5 right-5 z-50 flex justify-center sm:left-auto sm:right-8" role="status" data-testid="status-future-module">
+            <div className="pointer-events-auto flex max-w-[390px] items-center gap-3 rounded-xl border-2 border-[#182129] bg-[#182129] px-4 py-3 text-sm text-[#f4f0e8] shadow-[5px_5px_0_#ff653f]">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-[#b8d94b]" />
+              <span className="flex-1">{notice}</span>
+              <button type="button" onClick={() => setNotice(null)} className="rounded p-1 text-[#aebbb1] transition-colors hover:bg-[#273338] hover:text-[#f4f0e8]" aria-label="Dismiss message" data-testid="button-dismiss-future-message"><X size={15} /></button>
+            </div>
+          </div>
+        )}
         <main>{children}</main>
       </div>
     </div>
@@ -374,53 +439,73 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
 function DashboardPage() {
   const { user } = useUser();
-  const [saved, setSaved] = useState(false);
+  const [ritualStep, setRitualStep] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
   const displayName = user?.firstName || 'curious human';
+  const ritualSteps = [
+    'Name one question you keep returning to.',
+    'Choose the discipline that might help you answer it.',
+    'Leave yourself one next move for later.',
+  ];
+  const fieldNotes = WORKBENCH_MODULES.find((module) => module.id === 'field-notes');
+  const ritualComplete = ritualStep === ritualSteps.length;
+  const showFutureNotice = (module: WorkbenchModule) => {
+    setNotice(`${module.title} is still on the horizon. We will share the first signal here.`);
+  };
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 4200);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   return (
     <div className="nf-grid min-h-[calc(100dvh-76px)] px-5 py-8 sm:px-8 lg:px-10 lg:py-12">
       <div className="mx-auto max-w-[1160px]">
         <div className="animate-rise flex flex-col justify-between gap-7 lg:flex-row lg:items-end">
           <div>
-            <div className="nf-mono text-[10px] uppercase tracking-[.2em] text-[#ff653f]">Tuesday · member home</div>
+            <div className="nf-mono text-[10px] uppercase tracking-[.2em] text-[#ff653f]">member home / personal workbench</div>
             <h1 className="nf-display mt-3 text-5xl font-bold leading-[.9] tracking-[-.07em] sm:text-7xl" data-testid="heading-dashboard">Good to see you,<br /><span className="text-[#768a32]">{displayName}.</span></h1>
-            <p className="mt-5 max-w-[480px] text-sm leading-6 text-[#66716f]">The bench is clear. Here is what is happening in the wider clubhouse.</p>
+            <p className="mt-5 max-w-[480px] text-sm leading-6 text-[#66716f]">A quiet place to choose what you are curious about next, then make the first move.</p>
           </div>
           <Link href="/settings" className="group flex w-fit items-center gap-2 rounded-lg border-2 border-[#182129] bg-[#f8f5ef] px-4 py-3 text-sm font-bold shadow-[4px_4px_0_#b8d94b] transition-all hover:-translate-y-0.5" data-testid="link-dashboard-settings"><Settings size={16} /> Account settings <ArrowRight size={15} className="transition-transform group-hover:translate-x-1" /></Link>
         </div>
         <div className="mt-12 grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
           <section className="animate-rise delay-2 overflow-hidden rounded-2xl border-2 border-[#182129] bg-[#182129] p-6 text-[#f4f0e8] shadow-[6px_7px_0_#ff653f] sm:p-8" data-testid="card-welcome">
-            <div className="flex items-start justify-between"><div className="flex items-center gap-2 text-[#b8d94b]"><Sparkles size={18} /><span className="nf-mono text-[10px] uppercase tracking-[.17em]">welcome to the bench</span></div><span className="nf-mono text-[10px] text-[#73827a]">01 / 03</span></div>
-            <h2 className="nf-display mt-16 max-w-[560px] text-4xl font-bold leading-[.92] tracking-[-.06em] sm:text-6xl">Start with a<br /><span className="text-[#ff653f]">small obsession.</span></h2>
-            <p className="mt-5 max-w-[430px] text-sm leading-6 text-[#bec8bf]">The best projects start as a question you cannot stop turning over. Your personal workbench is ready for the first one.</p>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2 text-[#b8d94b]"><Sparkles size={18} /><span className="nf-mono text-[10px] uppercase tracking-[.17em]">first ritual / {ritualComplete ? 'captured' : `${ritualStep + 1} of 3`}</span></div>
+              <span className="nf-mono text-[10px] text-[#73827a]">01 / 03</span>
+            </div>
+            <h2 className="nf-display mt-14 max-w-[560px] text-4xl font-bold leading-[.92] tracking-[-.06em] sm:text-6xl">Start with a<br /><span className="text-[#ff653f]">small obsession.</span></h2>
+            <p className="mt-5 max-w-[430px] text-sm leading-6 text-[#bec8bf]">{ritualComplete ? 'That is enough for today. Your first thread is on the bench, ready whenever you are.' : ritualSteps[ritualStep]}</p>
+            <div className="mt-7 flex gap-1.5" aria-label="First ritual progress" data-testid="progress-first-ritual">
+              {ritualSteps.map((step, index) => <span key={step} className={`h-1.5 flex-1 rounded-full ${index < ritualStep || ritualComplete ? 'bg-[#b8d94b]' : 'bg-[#46534d]'}`} />)}
+            </div>
             <div className="mt-8 flex flex-wrap items-center gap-4">
-              <button type="button" onClick={() => setSaved(!saved)} className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition-colors ${saved ? 'bg-[#b8d94b] text-[#182129]' : 'bg-[#ff653f] text-[#182129] hover:bg-[#b8d94b]'}`} data-testid="button-start-ritual">{saved ? <Check size={16} /> : <Zap size={16} />}{saved ? 'Added to your bench' : 'Add a first ritual'}</button>
-              <span className="nf-mono text-[9px] uppercase tracking-[.12em] text-[#78867e]">takes about 30 seconds</span>
+              <button type="button" disabled={ritualComplete} onClick={() => setRitualStep((step) => Math.min(step + 1, ritualSteps.length))} className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-bold transition-colors ${ritualComplete ? 'cursor-default bg-[#b8d94b] text-[#182129]' : 'bg-[#ff653f] text-[#182129] hover:bg-[#b8d94b]'}`} data-testid="button-start-ritual">{ritualComplete ? <Check size={16} /> : <Zap size={16} />}{ritualComplete ? 'Ritual captured' : ritualStep === 0 ? 'Begin the ritual' : 'Mark this step complete'}</button>
+              <span className="nf-mono text-[9px] uppercase tracking-[.12em] text-[#78867e]">{ritualComplete ? 'your first thread is ready' : 'takes about 30 seconds'}</span>
             </div>
           </section>
           <div className="grid gap-5">
-            <section className="animate-rise delay-3 rounded-2xl border-2 border-[#182129] bg-[#e7edc9] p-6" data-testid="card-member-status">
-              <div className="flex items-center justify-between"><span className="nf-mono text-[10px] uppercase tracking-[.17em] text-[#56652b]">your signal</span><span className="rounded-full bg-[#b8d94b] px-2 py-1 nf-mono text-[8px] uppercase tracking-[.1em]">online</span></div>
-              <div className="mt-8 flex items-end justify-between"><div><div className="nf-display text-5xl font-bold tracking-[-.08em]">001842</div><div className="mt-1 text-xs text-[#687363]">member number</div></div><Compass className="text-[#ff653f]" size={36} strokeWidth={1.5} /></div>
-              <div className="mt-6 h-2 overflow-hidden rounded-full bg-[#cbd6a4]"><div className="h-full w-[68%] rounded-full bg-[#182129]" /></div><div className="mt-2 flex justify-between nf-mono text-[9px] uppercase tracking-[.1em] text-[#718067]"><span>bench setup</span><span>68%</span></div>
-            </section>
+            <MemberSignal />
             <section className="animate-rise delay-4 rounded-2xl border-2 border-[#182129] bg-[#f8f5ef] p-6" data-testid="card-next-signal">
               <div className="flex items-center justify-between"><span className="nf-mono text-[10px] uppercase tracking-[.17em] text-[#ff653f]">next signal</span><ArrowRight size={16} /></div>
-              <h3 className="nf-display mt-6 text-2xl font-bold leading-[.95] tracking-[-.05em]">Field notes are<br />coming online.</h3>
-              <p className="mt-3 text-xs leading-5 text-[#707b77]">Short, useful sparks from deep in the rabbit hole.</p>
-              <button type="button" onClick={() => window.alert('You are on the list. We will signal you when notes go live.')} className="mt-5 flex items-center gap-2 text-xs font-bold hover:text-[#ff653f]" data-testid="button-notify-notes">Notify me when they land <ChevronRight size={14} /></button>
+              <div className="mt-6 flex items-start gap-3">
+                {fieldNotes && <EmptyModuleMark module={fieldNotes} />}
+                <div><h3 className="nf-display text-2xl font-bold leading-[.95] tracking-[-.05em]">Field notes are<br />coming online.</h3><p className="mt-3 text-xs leading-5 text-[#707b77]">Short, useful sparks from deep in the rabbit hole.</p></div>
+              </div>
+              <button type="button" onClick={() => fieldNotes && showFutureNotice(fieldNotes)} className="mt-5 flex items-center gap-2 text-xs font-bold hover:text-[#ff653f]" data-testid="button-notify-notes">Keep me in the loop <ChevronRight size={14} /></button>
             </section>
           </div>
         </div>
-        <section className="animate-rise delay-5 mt-12 border-t-2 border-[#182129] pt-6" data-testid="section-coming-soon">
-          <div className="flex items-center justify-between"><div><div className="nf-mono text-[10px] uppercase tracking-[.2em] text-[#ff653f]">on the horizon</div><h2 className="nf-display mt-2 text-3xl font-bold tracking-[-.06em]">The foundry is warming up.</h2></div><span className="hidden nf-mono text-[9px] uppercase tracking-[.12em] text-[#7d8781] sm:block">built in the open</span></div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            {[['01', 'Your workbench', 'A place to collect the things you are learning.', <Library />], ['02', 'Field notes', 'Ideas worth saving, sharing, and trying.', <BookOpen />], ['03', 'The commons', 'Small rooms for big, specific interests.', <Users />]].map(([num, title, text, icon]) => (
-              <button type="button" key={String(num)} onClick={() => window.alert('This part of the clubhouse is still being forged.')} className="group rounded-xl border border-[#c9c8bd] bg-[#f8f5ef] p-4 text-left transition-all hover:-translate-y-1 hover:border-[#182129] hover:shadow-[4px_4px_0_#b8d94b]" data-testid={`button-horizon-${num}`}>
-                <div className="flex items-center justify-between text-[#768a32]"><span className="nf-mono text-[9px]">{num}</span>{icon}</div><h3 className="mt-7 text-sm font-bold">{String(title)}</h3><p className="mt-1 text-xs leading-5 text-[#73807a]">{String(text)}</p>
-              </button>
-            ))}
+        <WorkbenchModuleRail onFutureSelect={showFutureNotice} />
+        <HorizonModules onFutureSelect={showFutureNotice} />
+        {notice && (
+          <div className="mt-6 flex items-center gap-3 border-l-2 border-[#ff653f] bg-[#f8f5ef] px-4 py-3 text-sm shadow-[4px_4px_0_#b8d94b]" role="status" data-testid="status-dashboard-future-module">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-[#ff653f]" />
+            <span className="flex-1">{notice}</span>
+            <button type="button" onClick={() => setNotice(null)} className="rounded p-1 text-[#7d8781] hover:bg-[#e7edc9] hover:text-[#182129]" aria-label="Dismiss message" data-testid="button-dismiss-dashboard-message"><X size={15} /></button>
           </div>
-        </section>
+        )}
       </div>
     </div>
   );
