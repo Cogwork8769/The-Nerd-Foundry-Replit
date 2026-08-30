@@ -1,6 +1,6 @@
-# [Project name]
+# The Nerd Foundry
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+The Nerd Foundry is a welcoming home for nerdy hobbies and communities, with a public landing page and auth-ready member workspace foundation.
 
 ## Run & Operate
 
@@ -22,23 +22,33 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/the-nerd-foundry/src/App.tsx` — public landing page, Clerk auth routes, member dashboard, and settings shell
+- `artifacts/the-nerd-foundry/src/index.css` — shared palette, typography, grid textures, and motion
+- `artifacts/the-nerd-foundry/public/logo.svg` — branded auth and app mark
+- `artifacts/api-server/src/app.ts` — shared Express server and Clerk middleware/proxy wiring
+- `.local/skills/clerk-auth/references/setup-and-customization.md` — auth integration source of truth
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Clerk owns authentication and browser sessions; no local password or token implementation is used.
+- The base route remains a public landing page for signed-out visitors and routes authenticated members to the dashboard.
+- The first release focuses on the brand and account foundation; hobby tools, communities, and field notes remain intentionally future surfaces.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Responsive public landing page for The Nerd Foundry
+- Branded Clerk sign-in and sign-up flows
+- Authenticated member dashboard with onboarding and product horizon
+- Account settings through the embedded Clerk profile surface
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+No additional preferences recorded.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- The frontend and API workflows are managed artifacts; restart the exact managed workflows after auth or toolchain changes.
+- The API server must mount the Clerk proxy before body parsers for production custom-domain support.
 
 ## Pointers
 

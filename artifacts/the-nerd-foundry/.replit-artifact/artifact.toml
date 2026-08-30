@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "The Nerd Foundry"
+description = "A polished home for nerdy hobbies and communities, with a welcoming landing page, auth-ready member experience, dashboard, and account settings foundation."
+version = "1.0.0"
+id = "artifacts/the-nerd-foundry"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21971
+
+[services.development]
+run = "pnpm --filter @workspace/the-nerd-foundry run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/the-nerd-foundry", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/the-nerd-foundry/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21971"
+BASE_PATH = "/"
