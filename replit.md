@@ -1,6 +1,6 @@
 # The Nerd Foundry
 
-The Nerd Foundry is a welcoming home for nerdy hobbies and communities, with a public landing page and auth-ready member workspace foundation.
+The Nerd Foundry is a welcoming home for nerdy hobbies and communities, with a public landing page and auth-ready member workspace. The first active hobby suites are Cubing, D&D, and Magic: The Gathering.
 
 ## Run & Operate
 
@@ -22,7 +22,10 @@ The Nerd Foundry is a welcoming home for nerdy hobbies and communities, with a p
 
 ## Where things live
 
-- `artifacts/the-nerd-foundry/src/App.tsx` — public landing page, Clerk auth routes, member dashboard, and settings shell
+- `artifacts/the-nerd-foundry/src/App.tsx` — public landing page, Clerk auth routes, member dashboard, hobby routes, and settings shell
+- `artifacts/the-nerd-foundry/src/modules/cubing.tsx` — Cubing timer, sessions, solves, statistics, practice, profile, cube collection, and attended competition logbook
+- `artifacts/the-nerd-foundry/src/modules/dnd.tsx` — Character Forge, Campaign Forge, World Forge, and DM Kit
+- `artifacts/the-nerd-foundry/src/modules/mtg.tsx` — Deck Forge, Collection Forge, Playtest Lab, and Custom Card Forge
 - `artifacts/the-nerd-foundry/src/index.css` — shared palette, typography, grid textures, and motion
 - `artifacts/the-nerd-foundry/public/logo.svg` — branded auth and app mark
 - `artifacts/api-server/src/app.ts` — shared Express server and Clerk middleware/proxy wiring
@@ -33,12 +36,15 @@ The Nerd Foundry is a welcoming home for nerdy hobbies and communities, with a p
 - Clerk owns authentication and browser sessions; no local password or token implementation is used.
 - The base route remains a public landing page for signed-out visitors and routes authenticated members to the dashboard.
 - The first release focuses on the brand and account foundation; hobby tools, communities, and field notes remain intentionally future surfaces.
+- Cubing, D&D, and Magic: The Gathering are the first functional hobby modules. Their first-version records persist in member-scoped browser localStorage while the broader platform data model is still being shaped.
+- Games & Systems and Make & Create are intentionally deferred and should not be added to active module navigation until explicitly requested.
 
 ## Product
 
 - Responsive public landing page for The Nerd Foundry
 - Branded Clerk sign-in and sign-up flows
 - Authenticated member dashboard with onboarding and product horizon
+- Functional Cubing, D&D, and Magic: The Gathering hobby workbenches
 - Account settings through the embedded Clerk profile surface
 
 ## User preferences

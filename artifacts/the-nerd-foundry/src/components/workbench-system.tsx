@@ -35,8 +35,9 @@ export const WORKBENCH_MODULES: WorkbenchModule[] = [
     description: 'Campaign craft, worldbuilding, and table magic.',
     icon: Swords,
     accent: 'coral',
-    status: 'forging',
+    status: 'active',
     group: 'discipline',
+    href: '/dnd',
   },
   {
     id: 'mtg',
@@ -46,8 +47,9 @@ export const WORKBENCH_MODULES: WorkbenchModule[] = [
     description: 'Deck theory, draft reads, and cardboard alchemy.',
     icon: Hexagon,
     accent: 'lime',
-    status: 'forging',
+    status: 'active',
     group: 'discipline',
+    href: '/mtg',
   },
   {
     id: 'cubing',
@@ -57,8 +59,9 @@ export const WORKBENCH_MODULES: WorkbenchModule[] = [
     description: 'Algorithms, finger tricks, and satisfying solves.',
     icon: Orbit,
     accent: 'lime',
-    status: 'forging',
+    status: 'active',
     group: 'discipline',
+    href: '/cubing',
   },
   {
     id: 'field-notes',

@@ -14,7 +14,6 @@ import {
   LogOut,
   Menu,
   Orbit,
-  Palette,
   Settings,
   Sparkles,
   Swords,
@@ -40,6 +39,9 @@ import {
   WORKBENCH_MODULES,
   type WorkbenchModule,
 } from '@/components/workbench-system';
+import CubingPage from '@/modules/cubing';
+import DndModule from '@/modules/dnd';
+import MTGModule from '@/modules/mtg';
 import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
@@ -200,7 +202,7 @@ function LandingPage() {
           <div className="grid gap-12 lg:grid-cols-[.8fr_1.2fr] lg:gap-24">
             <div>
               <div className="nf-mono text-[10px] font-bold uppercase tracking-[.22em] text-[#ff653f]">01 / the workbench</div>
-              <h2 className="nf-display mt-5 text-4xl font-bold leading-[.95] tracking-[-.06em] sm:text-6xl">Five doors in.<br /><span className="text-[#768a32]">One curious</span><br />mind at a time.</h2>
+              <h2 className="nf-display mt-5 text-4xl font-bold leading-[.95] tracking-[-.06em] sm:text-6xl">Three doors in.<br /><span className="text-[#768a32]">One curious</span><br />mind at a time.</h2>
               <p className="mt-6 max-w-[350px] text-sm leading-6 text-[#657070]">A starting point for every flavor of deep dive. Pick a door, bring your questions, and leave with better ones.</p>
             </div>
             <div className="grid border-t-2 border-[#182129] sm:grid-cols-2" data-testid="grid-disciplines">
@@ -208,8 +210,6 @@ function LandingPage() {
                 { icon: <Swords />, title: 'Dungeons & Dragons', note: 'Campaign craft, worldbuilding, table magic.', color: 'text-[#ff653f]' },
                 { icon: <Hexagon />, title: 'Magic: The Gathering', note: 'Deck theory, draft reads, cardboard alchemy.', color: 'text-[#768a32]' },
                 { icon: <Orbit />, title: 'Rubik’s Cubing', note: 'Algorithms, finger tricks, satisfying solves.', color: 'text-[#ff653f]' },
-                { icon: <Gamepad2 />, title: 'Games & Systems', note: 'The why behind the play, not just the win.', color: 'text-[#768a32]' },
-                { icon: <Palette />, title: 'Make & Create', note: 'Code, art, music, miniatures, side quests.', color: 'text-[#ff653f]' },
                 { icon: <Sparkles />, title: 'The next obsession', note: 'There is always another rabbit hole.', color: 'text-[#768a32]' },
               ].map((item, index) => (
                 <button type="button" key={item.title} onClick={() => document.getElementById('field-notes')?.scrollIntoView({ behavior: 'smooth' })} className="group flex min-h-[156px] flex-col justify-between border-b-2 border-[#182129] py-5 text-left transition-colors hover:bg-[#e7edc9] sm:px-5 sm:even:border-l-2" data-testid={`button-discipline-${index}`}>
@@ -381,7 +381,21 @@ function AppShell({ children }: { children: ReactNode }) {
                 <div className="mt-1 grid gap-0.5">
                   {group.modules.map((module) => {
                     const Icon = module.icon;
-                    return (
+                    const content = (
+                      <span className="flex items-center gap-3 leading-4"><Icon size={16} />{module.title}</span>
+                    );
+                    return module.href && module.status === 'active' ? (
+                      <Link
+                        href={module.href}
+                        key={module.id}
+                        onClick={() => setMobileOpen(false)}
+                        className={`group flex items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${location === module.href ? 'bg-[#273338] text-[#f4f0e8]' : 'text-[#8f9b94] hover:bg-[#222e32] hover:text-[#f4f0e8]'}`}
+                        data-testid={`link-nav-${module.id}`}
+                      >
+                        {content}
+                        <span className="nf-mono text-[8px] uppercase tracking-[.1em] text-[#b8d94b]">open</span>
+                      </Link>
+                    ) : (
                       <button
                         type="button"
                         key={module.id}
@@ -389,7 +403,7 @@ function AppShell({ children }: { children: ReactNode }) {
                         className="group flex items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#8f9b94] transition-colors hover:bg-[#222e32] hover:text-[#f4f0e8]"
                         data-testid={`button-nav-${module.id}`}
                       >
-                        <span className="flex items-center gap-3 leading-4"><Icon size={16} />{module.title}</span>
+                        {content}
                         <span className="nf-mono text-[8px] uppercase tracking-[.1em] text-[#ff653f]">soon</span>
                       </button>
                     );
@@ -435,6 +449,12 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return <LoadingFrame />;
   return isSignedIn ? <AppShell>{children}</AppShell> : <Redirect to="/" />;
+}
+
+function ProtectedModuleRoute({ children }: { children: ReactNode }) {
+  const { isLoaded, isSignedIn } = useAuth();
+  if (!isLoaded) return <LoadingFrame />;
+  return isSignedIn ? children : <Redirect to="/" />;
 }
 
 function DashboardPage() {
@@ -651,6 +671,15 @@ function ClerkProviderWithRoutes() {
           <Route path="/sign-up/*?" component={SignUpPage} />
           <Route path="/dashboard">
             <ProtectedRoute><DashboardPage /></ProtectedRoute>
+          </Route>
+          <Route path="/cubing">
+            <ProtectedModuleRoute><CubingPage /></ProtectedModuleRoute>
+          </Route>
+          <Route path="/dnd">
+            <ProtectedModuleRoute><DndModule /></ProtectedModuleRoute>
+          </Route>
+          <Route path="/mtg">
+            <ProtectedModuleRoute><MTGModule /></ProtectedModuleRoute>
           </Route>
           <Route path="/settings/*?">
             <ProtectedRoute><SettingsPage /></ProtectedRoute>
