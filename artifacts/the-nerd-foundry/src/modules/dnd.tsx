@@ -164,6 +164,7 @@ const starterCharacter = (): Character => ({
   spells: ['Hunter’s mark', 'Pass without trace', 'Goodberry'],
   notes: 'Owes the Ferryman one honest answer.',
 });
+```tsx
 const starterCampaign = (): Campaign => ({
   id: uid('camp'),
   name: 'The Ashen Meridian',
@@ -179,49 +180,92 @@ const starterCampaign = (): Campaign => ({
   notes: '',
   world: emptyWorld(),
 });
-const initialData = (): ForgeData => ({ characters: [starterCharacter()], campaigns: [starterCampaign()], initiative: [], encounter: [], rolls: [] });
+
+const initialData = (): ForgeData => ({
+  characters: [starterCharacter()],
+  campaigns: [starterCampaign()],
+  initiative: [],
+  encounter: [],
+  rolls: [],
+});
+
 const migrateForgeData = (value: ForgeData): ForgeData => ({
   characters: (value.characters ?? []).map((character) => ({
     ...character,
     compendium: {
-  speciesId: character.compendium?.speciesId ?? idsForNames([character.race], 'species')[0],
-  classId: character.compendium?.classId ?? idsForNames([character.className], 'class')[0],
-  subclassId: character.compendium?.subclassId,
-  backgroundId: character.compendium?.backgroundId,
-  featIds: character.compendium?.featIds ?? idsForNames(character.feats, 'feat'),
-  spellIds: character.compendium?.spellIds ?? idsForNames(character.spells, 'spell'),
-  equipmentIds: character.compendium?.equipmentIds ?? idsForNames(
-    [...character.inventory, ...character.equipment].map((item) => item.name)
-  ),
-  featureIds: character.compendium?.featureIds ?? [],
-},
+      speciesId:
+        character.compendium?.speciesId ??
+        idsForNames([character.race], 'species')[0],
+      classId:
+        character.compendium?.classId ??
+        idsForNames([character.className], 'class')[0],
+      subclassId: character.compendium?.subclassId,
+      backgroundId: character.compendium?.backgroundId,
+      featIds:
+        character.compendium?.featIds ??
+        idsForNames(character.feats, 'feat'),
+      spellIds:
+        character.compendium?.spellIds ??
+        idsForNames(character.spells, 'spell'),
+      equipmentIds:
+        character.compendium?.equipmentIds ??
+        idsForNames(
+          [...character.inventory, ...character.equipment].map(
+            (item) => item.name
+          )
+        ),
       featureIds: character.compendium?.featureIds ?? [],
     },
   })),
+
   campaigns: (value.campaigns ?? []).map((campaign) => ({
     ...campaign,
     world: campaign.world ?? emptyWorld(),
     compendium: {
       creatureIds: campaign.compendium?.creatureIds ?? [],
-     equipmentIds: character.compendium?.equipmentIds ?? idsForNames(
-  [...character.inventory, ...character.equipment].map((item) => item.name)
-),
+      equipmentIds: campaign.compendium?.equipmentIds ?? [],
       spellIds: campaign.compendium?.spellIds ?? [],
     },
   })),
+
   initiative: value.initiative ?? [],
   encounter: value.encounter ?? [],
   rolls: value.rolls ?? [],
 });
 
-function Field({ label, value, onChange, placeholder, type = 'text', testId }: { label: string; value: string | number; onChange: (value: string) => void; placeholder?: string; type?: string; testId: string }) {
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+  testId,
+}: {
+  label: string;
+  value: string | number;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+  testId: string;
+}) {
   return (
     <label className="grid gap-1.5 text-[11px] font-semibold text-[#526060]">
-      <span className="nf-mono text-[9px] uppercase tracking-[.13em] text-[#77827b]">{label}</span>
-      <input data-testid={testId} type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} className="min-w-0 rounded-md border border-[#bdb9af] bg-[#fbf8f2] px-3 py-2.5 text-sm text-[#182129] outline-none transition-colors placeholder:text-[#a0a39b] focus:border-[#ff653f] focus:ring-2 focus:ring-[#ff653f]/15" />
+      <span className="nf-mono text-[9px] uppercase tracking-[.13em] text-[#77827b]">
+        {label}
+      </span>
+      <input
+        data-testid={testId}
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-w-0 rounded-md border border-[#bdb9af] bg-[#fbf8f2] px-3 py-2.5 text-sm text-[#182129] outline-none transition-colors placeholder:text-[#a0a39b] focus:border-[#ff653f] focus:ring-2 focus:ring-[#ff653f]/15"
+      />
     </label>
   );
 }
+```
+
 
 function TextArea({ label, value, onChange, placeholder, testId, rows = 4 }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; testId: string; rows?: number }) {
   return (
