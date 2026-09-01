@@ -184,15 +184,17 @@ const migrateForgeData = (value: ForgeData): ForgeData => ({
   characters: (value.characters ?? []).map((character) => ({
     ...character,
     compendium: {
-      speciesId: character.compendium?.speciesId ?? idsForNames([character.race], 'species')[0],
-      classId: character.compendium?.classId ?? idsForNames([character.className], 'class')[0],
-      subclassId: character.compendium?.subclassId,
-      backgroundId: character.compendium?.backgroundId,
-      featIds: character.compendium?.featIds ?? idsForNames(character.feats, 'feat'),
-      spellIds: character.compendium?.spellIds ?? idsForNames(character.spells, 'spell'),
-      equipmentIds: character.compendium?.equipmentIds ?? idsForNames(
-  [...character.inventory, ...character.equipment].map((item) => item.name)
-),
+  speciesId: character.compendium?.speciesId ?? idsForNames([character.race], 'species')[0],
+  classId: character.compendium?.classId ?? idsForNames([character.className], 'class')[0],
+  subclassId: character.compendium?.subclassId,
+  backgroundId: character.compendium?.backgroundId,
+  featIds: character.compendium?.featIds ?? idsForNames(character.feats, 'feat'),
+  spellIds: character.compendium?.spellIds ?? idsForNames(character.spells, 'spell'),
+  equipmentIds: character.compendium?.equipmentIds ?? idsForNames(
+    [...character.inventory, ...character.equipment].map((item) => item.name)
+  ),
+  featureIds: character.compendium?.featureIds ?? [],
+},
       featureIds: character.compendium?.featureIds ?? [],
     },
   })),
@@ -201,7 +203,9 @@ const migrateForgeData = (value: ForgeData): ForgeData => ({
     world: campaign.world ?? emptyWorld(),
     compendium: {
       creatureIds: campaign.compendium?.creatureIds ?? [],
-      itemIds: campaign.compendium?.itemIds ?? idsForNames(campaign.items),
+     equipmentIds: character.compendium?.equipmentIds ?? idsForNames(
+  [...character.inventory, ...character.equipment].map((item) => item.name)
+),
       spellIds: campaign.compendium?.spellIds ?? [],
     },
   })),
