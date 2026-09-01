@@ -31,8 +31,21 @@ import {
   Zap,
 } from 'lucide-react';
 import { Link } from 'wouter';
+import {
+  COMPENDIUM_ATTRIBUTION,
+  COMPENDIUM_CATEGORIES,
+  COMPENDIUM_VERSION,
+  DND_COMPENDIUM,
+  compendiumById,
+  compendiumRecords,
+  idsForNames,
+  searchCompendium,
+  xpForChallenge,
+  type CompendiumCategory,
+  type CompendiumRecord,
+} from './dnd-compendium';
 
-type ForgeView = 'characters' | 'campaigns' | 'world' | 'kit';
+type ForgeView = 'characters' | 'campaigns' | 'world' | 'kit' | 'compendium';
 type Ability = 'STR' | 'DEX' | 'CON' | 'INT' | 'WIS' | 'CHA';
 type CollectionItem = { id: string; name: string; detail: string };
 type Session = CollectionItem & { date: string };
@@ -59,6 +72,16 @@ type Character = {
   currency: string;
   spells: string[];
   notes: string;
+  compendium?: {
+    speciesId?: string;
+    classId?: string;
+    subclassId?: string;
+    backgroundId?: string;
+    featIds?: string[];
+    spellIds?: string[];
+    equipmentIds?: string[];
+    featureIds?: string[];
+  };
 };
 
 type Campaign = {
@@ -75,6 +98,11 @@ type Campaign = {
   lore: CollectionItem[];
   notes: string;
   world: World;
+  compendium?: {
+    creatureIds?: string[];
+    itemIds?: string[];
+    spellIds?: string[];
+  };
 };
 
 type World = {
@@ -88,8 +116,8 @@ type World = {
   timelines: CollectionItem[];
 };
 
-type InitiativeEntry = { id: string; name: string; initiative: number; hp: number; note: string };
-type EncounterEntry = { id: string; name: string; quantity: number; xp: number };
+type InitiativeEntry = { id: string; name: string; initiative: number; hp: number; note: string; compendiumId?: string };
+type EncounterEntry = { id: string; name: string; quantity: number; xp: number; compendiumId?: string };
 type RollRecord = { id: string; expression: string; total: number; rolls: number[]; timestamp: string };
 
 type ForgeData = {
@@ -152,6 +180,33 @@ const starterCampaign = (): Campaign => ({
   world: emptyWorld(),
 });
 const initialData = (): ForgeData => ({ characters: [starterCharacter()], campaigns: [starterCampaign()], initiative: [], encounter: [], rolls: [] });
+const migrateForgeData = (value: ForgeData): ForgeData => ({
+  characters: (value.characters ?? []).map((character) => ({
+    ...character,
+    compendium: {
+      speciesId: character.compendium?.speciesId ?? idsForNames([character.race], 'species')[0],
+      classId: character.compendium?.classId ?? idsForNames([character.className], 'class')[0],
+      subclassId: character.compendium?.subclassId,
+      backgroundId: character.compendium?.backgroundId,
+      featIds: character.compendium?.featIds ?? idsForNames(character.feats, 'feat'),
+      spellIds: character.compendium?.spellIds ?? idsForNames(character.spells, 'spell'),
+      equipmentIds: character.compendium?.equipmentIds ?? idsForNames([...character.inventory, ...character.equipment]),
+      featureIds: character.compendium?.featureIds ?? [],
+    },
+  })),
+  campaigns: (value.campaigns ?? []).map((campaign) => ({
+    ...campaign,
+    world: campaign.world ?? emptyWorld(),
+    compendium: {
+      creatureIds: campaign.compendium?.creatureIds ?? [],
+      itemIds: campaign.compendium?.itemIds ?? idsForNames(campaign.items),
+      spellIds: campaign.compendium?.spellIds ?? [],
+    },
+  })),
+  initiative: value.initiative ?? [],
+  encounter: value.encounter ?? [],
+  rolls: value.rolls ?? [],
+});
 
 function Field({ label, value, onChange, placeholder, type = 'text', testId }: { label: string; value: string | number; onChange: (value: string) => void; placeholder?: string; type?: string; testId: string }) {
   return (
@@ -218,6 +273,75 @@ function CollectionPanel({ title, kicker, items, onAdd, onDelete, placeholder, i
   );
 }
 
+function ReferenceSelect({ label, category, value, onChange, testId, placeholder = 'Choose a canonical record' }: { label: string; category: CompendiumCategory; value?: string; onChange: (value: string) => void; testId: string; placeholder?: string }) {
+  return (
+    <label className="grid gap-1.5 text-[11px] font-semibold text-[#526060]">
+      <span className="nf-mono text-[9px] uppercase tracking-[.13em] text-[#77827b]">{label}</span>
+      <select data-testid={testId} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className="min-w-0 rounded-md border border-[#bdb9af] bg-[#fbf8f2] px-3 py-2.5 text-sm text-[#182129] outline-none focus:border-[#ff653f]">
+        <option value="">{placeholder}</option>
+        {compendiumRecords(category).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function ReferencePicker({ label, category, ids, onChange, testId }: { label: string; category: CompendiumCategory; ids: string[]; onChange: (ids: string[]) => void; testId: string }) {
+  const [selectedId, setSelectedId] = useState('');
+  const records = ids.map((id) => compendiumById(id)).filter((entry): entry is CompendiumRecord => Boolean(entry));
+  const add = () => {
+    if (selectedId && !ids.includes(selectedId)) onChange([...ids, selectedId]);
+    setSelectedId('');
+  };
+  return (
+    <div className="grid gap-2">
+      <div className="nf-mono text-[9px] uppercase tracking-[.13em] text-[#77827b]">{label}</div>
+      <div className="flex gap-2">
+        <select data-testid={`${testId}-select`} value={selectedId} onChange={(event) => setSelectedId(event.target.value)} className="min-w-0 flex-1 rounded-md border border-[#bdb9af] bg-[#f8f5ef] px-2.5 py-2 text-xs outline-none focus:border-[#ff653f]">
+          <option value="">Add from compendium…</option>
+          {compendiumRecords(category).filter((entry) => !ids.includes(entry.id)).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+        </select>
+        <button type="button" data-testid={`${testId}-add`} onClick={add} className="rounded-md border border-[#182129] px-2.5 text-[#182129] transition-colors hover:bg-[#182129] hover:text-[#f4f0e8]"><Plus size={15} /></button>
+      </div>
+      <div className="flex flex-wrap gap-1.5">{records.map((entry) => <span key={entry.id} className="inline-flex items-center gap-1 rounded-md border border-[#c7c3b8] bg-[#e9edcf] px-2 py-1 text-[11px] font-semibold text-[#46571e]">{entry.name}<button type="button" onClick={() => onChange(ids.filter((id) => id !== entry.id))} className="rounded p-0.5 text-[#75862d] hover:bg-[#b8d94b] hover:text-[#182129]" aria-label={`Remove ${entry.name}`}><X size={12} /></button></span>)}</div>
+    </div>
+  );
+}
+
+function CompendiumPage() {
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<CompendiumCategory | undefined>();
+  const [selectedId, setSelectedId] = useState(DND_COMPENDIUM[0]?.id ?? '');
+  const results = useMemo(() => searchCompendium(query, category), [query, category]);
+  const selected = compendiumById(selectedId) ?? results[0];
+  const categoryCount = (id: CompendiumCategory) => compendiumRecords(id).length;
+  return (
+    <div className="grid gap-5">
+      <Panel className="bg-[#182129] text-[#f4f0e8]" title="Current rules compendium" kicker={`${COMPENDIUM_VERSION} · ${DND_COMPENDIUM.length} indexed records`}>
+        <div className="grid gap-4 lg:grid-cols-[1.4fr_.6fr] lg:items-end">
+          <label className="grid gap-1.5 text-[11px] font-semibold text-[#dce4d9]">
+            <span className="nf-mono text-[9px] uppercase tracking-[.13em] text-[#b8d94b]">Search everything</span>
+            <input data-testid="input-compendium-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try fireball, grappler, goblin, exhausted…" className="rounded-md border border-[#43504d] bg-[#202c30] px-3 py-3 text-sm text-[#f4f0e8] outline-none placeholder:text-[#89978f] focus:border-[#b8d94b]" />
+          </label>
+          <label className="grid gap-1.5 text-[11px] font-semibold text-[#dce4d9]">
+            <span className="nf-mono text-[9px] uppercase tracking-[.13em] text-[#b8d94b]">Filter by family</span>
+            <select data-testid="select-compendium-category" value={category ?? ''} onChange={(event) => setCategory((event.target.value || undefined) as CompendiumCategory | undefined)} className="rounded-md border border-[#43504d] bg-[#202c30] px-3 py-3 text-sm text-[#f4f0e8] outline-none focus:border-[#b8d94b]">
+              <option value="">All families</option>
+              {COMPENDIUM_CATEGORIES.map((item) => <option key={item.id} value={item.id}>{item.label} · {categoryCount(item.id)}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">{COMPENDIUM_CATEGORIES.map((item) => <button type="button" key={item.id} onClick={() => setCategory(category === item.id ? undefined : item.id)} className={`rounded-full border px-2.5 py-1.5 text-[10px] font-bold transition-colors ${category === item.id ? 'border-[#b8d94b] bg-[#b8d94b] text-[#182129]' : 'border-[#43504d] text-[#b8c6bd] hover:border-[#b8d94b]'}`}>{item.label} <span className="nf-mono ml-1 opacity-70">{categoryCount(item.id)}</span></button>)}</div>
+      </Panel>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,.95fr)]">
+        <Panel title={`${results.length} records`} kicker={query ? `matching “${query}”` : 'indexed reference shelf'}>
+          <div className="grid max-h-[620px] gap-2 overflow-y-auto pr-1">{results.length === 0 ? <EmptyState icon={BookOpen} title="No matching records" copy="Try a broader term or clear the family filter." /> : results.map((entry) => <button type="button" key={entry.id} data-testid={`button-compendium-record-${entry.id}`} onClick={() => setSelectedId(entry.id)} className={`rounded-md border p-3 text-left transition-all ${selected?.id === entry.id ? 'border-[#182129] bg-[#e9edcf] shadow-[3px_3px_0_#ff653f]' : 'border-[#d5d0c7] bg-[#f8f5ef] hover:border-[#182129]'}`}><div className="flex items-start justify-between gap-3"><span className="text-sm font-bold">{entry.name}</span><span className="nf-mono shrink-0 text-[8px] uppercase tracking-[.1em] text-[#ff653f]">{entry.category.replace('-', ' ')}</span></div><p className="mt-1 text-xs leading-5 text-[#77827b]">{entry.summary || 'Canonical SRD record.'}</p></button>)}</div>
+        </Panel>
+        {selected ? <Panel className="bg-[#dce8ed]" title={selected.name} kicker={`${selected.category.replace('-', ' ')} · ${selected.source}`}><p className="text-sm leading-6 text-[#526060]">{selected.summary || 'Canonical current-rules record.'}</p><div className="mt-4 flex flex-wrap gap-1.5">{selected.tags.map((tag) => <span key={tag} className="rounded bg-[#f8f5ef] px-2 py-1 nf-mono text-[9px] uppercase tracking-[.1em] text-[#64767a]">{tag.replace('-', ' ')}</span>)}</div><div className="mt-5 grid gap-2 border-t border-[#bacbd0] pt-4">{Object.entries(selected.data).filter(([, value]) => typeof value !== 'object' && value !== undefined).slice(0, 10).map(([key, value]) => <div key={key} className="flex items-start justify-between gap-4 text-xs"><span className="nf-mono text-[9px] uppercase tracking-[.1em] text-[#77827b]">{key.replace(/([A-Z])/g, ' $1')}</span><strong className="text-right text-[#182129]">{String(value)}</strong></div>)}</div><div className="mt-6 border-t border-[#bacbd0] pt-4 text-[10px] leading-5 text-[#64767a]">{COMPENDIUM_ATTRIBUTION}</div></Panel> : <EmptyState icon={BookOpen} title="Choose a record" copy="Select a result to inspect its canonical fields." />}
+      </div>
+    </div>
+  );
+}
+
 export default function DndModule() {
   const { user } = useUser();
   const scope = user?.id ?? 'guest';
@@ -232,12 +356,12 @@ export default function DndModule() {
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(storageKey);
-      const parsed = stored ? JSON.parse(stored) as ForgeData : initialData();
+      const parsed = stored ? migrateForgeData(JSON.parse(stored) as ForgeData) : initialData();
       setData(parsed);
       setSelectedCharacterId(parsed.characters[0]?.id ?? null);
       setSelectedCampaignId(parsed.campaigns[0]?.id ?? null);
     } catch {
-      setData(initialData());
+      setData(migrateForgeData(initialData()));
     }
     setLoaded(true);
   }, [storageKey]);
@@ -281,6 +405,7 @@ export default function DndModule() {
     { id: 'campaigns', label: 'Campaign Forge', icon: ScrollText, note: 'table memory' },
     { id: 'world', label: 'World Forge', icon: Map, note: 'setting foundation' },
     { id: 'kit', label: 'DM Kit', icon: Dices, note: 'live table tools' },
+    { id: 'compendium', label: 'Compendium', icon: BookOpen, note: 'current SRD 5.2' },
   ];
 
   return (
@@ -294,7 +419,7 @@ export default function DndModule() {
       </header>
 
       <main className="mx-auto max-w-[1440px] px-4 py-6 sm:px-7 sm:py-8 lg:px-10">
-        <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><div className="nf-mono text-[10px] font-bold uppercase tracking-[.2em] text-[#ff653f]">the campaign maker’s bench</div><h1 className="nf-display mt-2 max-w-[760px] text-4xl font-bold leading-[.92] tracking-[-.07em] sm:text-6xl">{view === 'characters' ? 'Keep the numbers honest.' : view === 'campaigns' ? 'Leave the table better than you found it.' : view === 'world' ? 'Give the map somewhere to go.' : 'Tools for the six-second decision.'}</h1><p className="mt-4 max-w-[620px] text-sm leading-6 text-[#697574]">{view === 'characters' ? 'A reliable character sheet for the details that matter in play, from proficiency math to the thing nobody remembers until session three.' : view === 'campaigns' ? 'Campaign memory that sits beside the moving parts: people, places, promises, and the last thing the players definitely did not expect.' : view === 'world' ? 'Build outward from the table. Keep regions, powers, gods, and history close enough to collide.' : 'Initiative, encounters, dice, and sparks. Small instruments, ready before the room gets loud.'}</p></div><div className="nf-mono max-w-[200px] border-l-2 border-[#ff653f] pl-3 text-[10px] uppercase leading-5 tracking-[.12em] text-[#77827b]">No account sync.<br />No hidden rolls.<br /><span className="text-[#182129]">Just your local bench.</span></div></div>
+         <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><div className="nf-mono text-[10px] font-bold uppercase tracking-[.2em] text-[#ff653f]">the campaign maker’s bench</div><h1 className="nf-display mt-2 max-w-[760px] text-4xl font-bold leading-[.92] tracking-[-.07em] sm:text-6xl">{view === 'characters' ? 'Keep the numbers honest.' : view === 'campaigns' ? 'Leave the table better than you found it.' : view === 'world' ? 'Give the map somewhere to go.' : view === 'compendium' ? 'Rules, indexed for play.' : 'Tools for the six-second decision.'}</h1><p className="mt-4 max-w-[620px] text-sm leading-6 text-[#697574]">{view === 'characters' ? 'A reliable character sheet for the details that matter in play, from proficiency math to the thing nobody remembers until session three.' : view === 'campaigns' ? 'Campaign memory that sits beside the moving parts: people, places, promises, and the last thing the players definitely did not expect.' : view === 'world' ? 'Build outward from the table. Keep regions, powers, gods, and history close enough to collide.' : view === 'compendium' ? 'A single current-rules source for builders, encounters, initiative, and the questions that usually send someone reaching for another tab.' : 'Initiative, encounters, dice, and sparks. Small instruments, ready before the room gets loud.'}</p></div><div className="nf-mono max-w-[200px] border-l-2 border-[#ff653f] pl-3 text-[10px] uppercase leading-5 tracking-[.12em] text-[#77827b]">No account sync.<br />No hidden rolls.<br /><span className="text-[#182129]">Just your local bench.</span></div></div>
 
         {!loaded ? <div className="grid gap-3 md:grid-cols-3"><div className="h-36 animate-pulse rounded-xl bg-[#e7e1d6]" /><div className="h-36 animate-pulse rounded-xl bg-[#e7e1d6]" /><div className="h-36 animate-pulse rounded-xl bg-[#e7e1d6]" /></div> : view === 'characters' ? (
           <CharacterForge characters={data.characters} selected={selectedCharacter} selectedId={selectedCharacterId} onSelect={setSelectedCharacterId} onCreate={createCharacter} onDelete={deleteCharacter} onUpdate={updateCharacter} onNotify={notify} />
@@ -302,6 +427,8 @@ export default function DndModule() {
           <CampaignForge campaigns={data.campaigns} characters={data.characters} selected={selectedCampaign} selectedId={selectedCampaignId} onSelect={setSelectedCampaignId} onCreate={createCampaign} onDelete={deleteCampaign} onUpdate={updateCampaign} onNotify={notify} />
         ) : view === 'world' ? (
           <WorldForge campaign={selectedCampaign} onUpdate={updateCampaign} onNotify={notify} />
+         ) : view === 'compendium' ? (
+           <CompendiumPage />
         ) : (
           <DmKit data={data} campaigns={data.campaigns} selectedCampaign={selectedCampaign} onUpdate={updateData} onCampaignUpdate={updateCampaign} onNotify={notify} />
         )}
@@ -327,13 +454,27 @@ function CharacterEditor({ character, onUpdate, onDelete, onNotify }: { characte
   const [levelUpOpen, setLevelUpOpen] = useState(false);
   const [levelNote, setLevelNote] = useState('');
   const patch = (key: keyof Character, value: string | number | string[] | Record<Ability, number>) => onUpdate(character.id, { [key]: value } as Partial<Character>);
+  const canonical = character.compendium ?? {};
+  const patchCanonical = (key: keyof NonNullable<Character['compendium']>, value: string | string[] | undefined) => onUpdate(character.id, { compendium: { ...canonical, [key]: value } });
+  const assignReference = (key: 'speciesId' | 'classId' | 'subclassId' | 'backgroundId', labelKey: 'race' | 'className' | 'subclass' | null, value: string) => {
+    const entry = compendiumById(value);
+    patchCanonical(key, value || undefined);
+    if (entry && labelKey) patch(labelKey, entry.name);
+  };
   const abilityModifier = (score: number) => Math.floor((score - 10) / 2);
   const levelUp = () => { const nextLevel = character.level + 1; const note = levelNote.trim(); patch('level', nextLevel); if (note) patch('feats', [...character.feats, `Level ${nextLevel}: ${note}`]); setLevelNote(''); setLevelUpOpen(false); onNotify(`Level ${nextLevel} recorded for ${character.name || 'this adventurer'}.`); };
+  const classFeatures = compendiumRecords('class-feature').filter((entry) => {
+    const isClassFeature = entry.parentId === canonical.classId;
+    const isSubclassFeature = canonical.subclassId ? entry.parentId === canonical.subclassId : false;
+    const level = Number(entry.data.level ?? 1);
+    return (isClassFeature || isSubclassFeature) && level <= character.level;
+  });
   return (
     <div className="grid min-w-0 gap-5">
       <Panel className="bg-[#e7edc9]" title={character.name || 'Unnamed adventurer'} kicker="active character sheet" action={<div className="flex gap-2"><ActionButton tone="lime" testId="button-level-up" onClick={() => setLevelUpOpen((open) => !open)}><Zap size={14} /> Level up</ActionButton><button type="button" data-testid="button-delete-character" onClick={() => onDelete(character.id)} aria-label="Delete character" className="rounded-md border border-[#c7aaa0] bg-[#ffe7de] px-2.5 text-[#a53c27] hover:bg-[#ffdbcf]"><Trash2 size={15} /></button></div>}>
         {levelUpOpen && <div className="mb-5 flex flex-col gap-2 rounded-md border border-[#a7b56c] bg-[#f8f5ef]/70 p-3 sm:flex-row sm:items-end"><div className="flex-1"><Field label={`Level ${character.level} → ${character.level + 1} note or feat / ASI`} value={levelNote} onChange={setLevelNote} placeholder="e.g. +2 DEX, Fey Touched, new oath" testId="input-level-up-note" /></div><ActionButton tone="coral" testId="button-confirm-level-up" onClick={levelUp}><Check size={14} /> Record level up</ActionButton></div>}
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Field label="Name" value={character.name} onChange={(value) => patch('name', value)} placeholder="Character name" testId="input-character-name" /><Field label="Player" value={character.player} onChange={(value) => patch('player', value)} placeholder="Player or seat" testId="input-character-player" /><Field label="Race / lineage" value={character.race} onChange={(value) => patch('race', value)} placeholder="Lineage" testId="input-character-race" /><Field label="Class" value={character.className} onChange={(value) => patch('className', value)} placeholder="Class" testId="input-character-class" /><Field label="Subclass" value={character.subclass} onChange={(value) => patch('subclass', value)} placeholder="Subclass or path" testId="input-character-subclass" /><Field label="Level" type="number" value={character.level} onChange={(value) => patch('level', Number(value) || 1)} placeholder="1" testId="input-character-level" /><Field label="HP max" type="number" value={character.hp} onChange={(value) => patch('hp', Number(value) || 0)} placeholder="0" testId="input-character-hp" /><Field label="AC" type="number" value={character.ac} onChange={(value) => patch('ac', Number(value) || 0)} placeholder="10" testId="input-character-ac" /><Field label="Initiative" type="number" value={character.initiative} onChange={(value) => patch('initiative', Number(value) || 0)} placeholder="0" testId="input-character-initiative" /><Field label="Proficiency bonus" type="number" value={character.proficiency} onChange={(value) => patch('proficiency', Number(value) || 0)} placeholder="2" testId="input-character-proficiency" /></div>
+         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Field label="Name" value={character.name} onChange={(value) => patch('name', value)} placeholder="Character name" testId="input-character-name" /><Field label="Player" value={character.player} onChange={(value) => patch('player', value)} placeholder="Player or seat" testId="input-character-player" /><Field label="Race / lineage" value={character.race} onChange={(value) => patch('race', value)} placeholder="Lineage" testId="input-character-race" /><Field label="Class" value={character.className} onChange={(value) => patch('className', value)} placeholder="Class" testId="input-character-class" /><Field label="Subclass" value={character.subclass} onChange={(value) => patch('subclass', value)} placeholder="Subclass or path" testId="input-character-subclass" /><Field label="Level" type="number" value={character.level} onChange={(value) => patch('level', Number(value) || 1)} placeholder="1" testId="input-character-level" /><Field label="HP max" type="number" value={character.hp} onChange={(value) => patch('hp', Number(value) || 0)} placeholder="0" testId="input-character-hp" /><Field label="AC" type="number" value={character.ac} onChange={(value) => patch('ac', Number(value) || 0)} placeholder="10" testId="input-character-ac" /><Field label="Initiative" type="number" value={character.initiative} onChange={(value) => patch('initiative', Number(value) || 0)} placeholder="0" testId="input-character-initiative" /><Field label="Proficiency bonus" type="number" value={character.proficiency} onChange={(value) => patch('proficiency', Number(value) || 0)} placeholder="2" testId="input-character-proficiency" /></div>
+         <div className="mt-4 grid gap-3 border-t border-[#c6d2a4] pt-4 sm:grid-cols-2 xl:grid-cols-4"><ReferenceSelect label="Current species record" category="species" value={canonical.speciesId} onChange={(value) => assignReference('speciesId', 'race', value)} testId="select-character-species" /><ReferenceSelect label="Current class record" category="class" value={canonical.classId} onChange={(value) => assignReference('classId', 'className', value)} testId="select-character-class" /><ReferenceSelect label="Subclass record" category="subclass" value={canonical.subclassId} onChange={(value) => assignReference('subclassId', 'subclass', value)} testId="select-character-subclass" /><ReferenceSelect label="Background record" category="background" value={canonical.backgroundId} onChange={(value) => assignReference('backgroundId', null, value)} testId="select-character-background" /></div>
       </Panel>
 
       <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
@@ -341,9 +482,10 @@ function CharacterEditor({ character, onUpdate, onDelete, onNotify }: { characte
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">{abilities.map((ability) => <label key={ability} className="grid gap-1 rounded-md border border-[#d5d0c7] bg-[#f8f5ef] p-2 text-center"><span className="nf-mono text-[9px] font-bold tracking-[.12em] text-[#ff653f]">{ability}</span><input data-testid={`input-ability-${ability}`} type="number" value={character.abilityScores[ability]} onChange={(event) => patch('abilityScores', { ...character.abilityScores, [ability]: Number(event.target.value) || 0 })} className="w-full bg-transparent text-center text-xl font-bold outline-none" /><span className="nf-mono text-[10px] text-[#77827b]">{abilityModifier(character.abilityScores[ability]) >= 0 ? '+' : ''}{abilityModifier(character.abilityScores[ability])}</span></label>)}</div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2"><ChipList label="Saving throws" items={character.saves} onChange={(items) => patch('saves', items)} placeholder="Add saving throw" testId="character-saves" /><ChipList label="Skills" items={character.skills} onChange={(items) => patch('skills', items)} placeholder="Add trained skill" testId="character-skills" /></div>
         </Panel>
-        <Panel title="Multiclass & advancement" kicker="build history"><div className="grid gap-4"><ChipList label="Multiclass entries" items={character.multiclass} onChange={(items) => patch('multiclass', items)} placeholder="e.g. Rogue 2" testId="character-multiclass" /><ChipList label="Feats / ASI / level notes" items={character.feats} onChange={(items) => patch('feats', items)} placeholder="Add feat or ASI" testId="character-feats" /></div></Panel>
+         <Panel title="Multiclass & advancement" kicker="build history"><div className="grid gap-4"><ChipList label="Multiclass entries" items={character.multiclass} onChange={(items) => patch('multiclass', items)} placeholder="e.g. Rogue 2" testId="character-multiclass" /><ChipList label="Feats / ASI / level notes" items={character.feats} onChange={(items) => patch('feats', items)} placeholder="Add feat or ASI" testId="character-feats" /><ReferencePicker label="Canonical feats" category="feat" ids={canonical.featIds ?? []} onChange={(ids) => patchCanonical('featIds', ids)} testId="character-feats-canonical" /></div></Panel>
       </div>
-      <div className="grid gap-5 xl:grid-cols-3"><Panel title="Pack & purse" kicker="what is within reach"><div className="grid gap-4"><ChipList label="Inventory" items={character.inventory} onChange={(items) => patch('inventory', items)} placeholder="Add carried item" testId="character-inventory" /><ChipList label="Equipment" items={character.equipment} onChange={(items) => patch('equipment', items)} placeholder="Add equipped item" testId="character-equipment" /><Field label="Currency" value={character.currency} onChange={(value) => patch('currency', value)} placeholder="12 gp · 4 sp" testId="input-character-currency" /></div></Panel><Panel title="Spellbook" kicker="prepared & known"><ChipList label="Spells" items={character.spells} onChange={(items) => patch('spells', items)} placeholder="Add spell" testId="character-spells" /></Panel><Panel title="Table notes" kicker="the details that become plot"><TextArea label="Notes" value={character.notes} onChange={(value) => patch('notes', value)} placeholder="Bonds, clues, promises, rules questions..." testId="textarea-character-notes" rows={9} /></Panel></div>
+       <div className="grid gap-5 xl:grid-cols-3"><Panel title="Pack & purse" kicker="what is within reach"><div className="grid gap-4"><ChipList label="Inventory" items={character.inventory} onChange={(items) => patch('inventory', items)} placeholder="Add carried item" testId="character-inventory" /><ChipList label="Equipment" items={character.equipment} onChange={(items) => patch('equipment', items)} placeholder="Add equipped item" testId="character-equipment" /><ReferencePicker label="Canonical gear" category="equipment" ids={canonical.equipmentIds ?? []} onChange={(ids) => patchCanonical('equipmentIds', ids)} testId="character-equipment-canonical" /><Field label="Currency" value={character.currency} onChange={(value) => patch('currency', value)} placeholder="12 gp · 4 sp" testId="input-character-currency" /></div></Panel><Panel title="Spellbook" kicker="prepared & known"><ChipList label="Spells" items={character.spells} onChange={(items) => patch('spells', items)} placeholder="Add spell" testId="character-spells" /><div className="mt-4"><ReferencePicker label="Canonical spells" category="spell" ids={canonical.spellIds ?? []} onChange={(ids) => patchCanonical('spellIds', ids)} testId="character-spells-canonical" /></div></Panel><Panel title="Table notes" kicker="the details that become plot"><TextArea label="Notes" value={character.notes} onChange={(value) => patch('notes', value)} placeholder="Bonds, clues, promises, rules questions..." testId="textarea-character-notes" rows={9} /></Panel></div>
+       <Panel className="bg-[#f8f5ef]" title="Rules loadout" kicker={`${classFeatures.length} current features available`}><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{classFeatures.length === 0 ? <EmptyState icon={BookOpen} title="Link a class to see features" copy="Choose current species, class, and subclass records above. Manual labels remain supported." /> : classFeatures.map((feature) => <div key={feature.id} className="rounded-md border border-[#d5d0c7] bg-[#fbf8f2] p-3"><div className="flex items-start justify-between gap-2"><strong className="text-sm">{feature.name}</strong><span className="nf-mono text-[8px] uppercase text-[#ff653f]">{String(feature.data.level ?? 1)} lvl</span></div><p className="mt-1 text-xs text-[#77827b]">{feature.summary}</p></div>)}</div></Panel>
     </div>
   );
 }
@@ -354,12 +496,14 @@ function CampaignForge({ campaigns, characters, selected, selectedId, onSelect, 
 
 function CampaignWorkspace({ campaign, characters, onUpdate, onDelete, onNotify }: { campaign: Campaign; characters: Character[]; onUpdate: (id: string, patch: Partial<Campaign>) => void; onDelete: (id: string) => void; onNotify: (message: string) => void }) {
   const patch = (key: keyof Campaign, value: string | string[] | Session[] | CollectionItem[]) => onUpdate(campaign.id, { [key]: value } as Partial<Campaign>);
+  const canonical = campaign.compendium ?? {};
+  const patchCanonical = (key: keyof NonNullable<Campaign['compendium']>, value: string[]) => onUpdate(campaign.id, { compendium: { ...canonical, [key]: value } });
   const addCollection = (key: 'npcs' | 'quests' | 'locations' | 'factions' | 'items' | 'lore', item: CollectionItem) => patch(key, [...campaign[key], item]);
   const deleteCollection = (key: 'npcs' | 'quests' | 'locations' | 'factions' | 'items' | 'lore', id: string) => patch(key, campaign[key].filter((item) => item.id !== id));
   const addSession = (item: CollectionItem) => patch('sessions', [...campaign.sessions, { ...item, date: new Date().toISOString().slice(0, 10) }]);
   const linked = characters.filter((character) => campaign.playerCharacters.includes(character.id));
   const unlinked = characters.filter((character) => !campaign.playerCharacters.includes(character.id));
-  return <div className="grid min-w-0 gap-5"><Panel className="bg-[#ffe0d6]" title={campaign.name} kicker="selected campaign workspace" action={<button type="button" data-testid="button-delete-campaign" onClick={() => onDelete(campaign.id)} className="rounded-md border border-[#d0a59a] bg-[#f8f5ef] p-2 text-[#a53c27] hover:bg-[#ffcec0]" aria-label="Delete campaign"><Trash2 size={15} /></button>}><div className="grid gap-3 md:grid-cols-[1fr_1.6fr]"><Field label="Campaign name" value={campaign.name} onChange={(value) => patch('name', value)} placeholder="Campaign name" testId="input-campaign-name" /><Field label="Pitch / current arc" value={campaign.pitch} onChange={(value) => patch('pitch', value)} placeholder="What is moving right now?" testId="input-campaign-pitch" /></div><div className="mt-4 flex flex-wrap items-center gap-2"><span className="nf-mono text-[9px] uppercase tracking-[.12em] text-[#8f594c]">Player characters</span>{linked.map((character) => <button type="button" key={character.id} data-testid={`button-unlink-character-${character.id}`} onClick={() => patch('playerCharacters', campaign.playerCharacters.filter((id) => id !== character.id))} className="rounded bg-[#182129] px-2 py-1 text-[10px] font-bold text-[#f4f0e8]">{character.name} <X size={11} className="ml-1 inline" /></button>)}{unlinked.length > 0 && <select data-testid="select-link-character" value="" onChange={(event) => { if (event.target.value) patch('playerCharacters', [...campaign.playerCharacters, event.target.value]); }} className="rounded border border-[#caa197] bg-[#f8f5ef] px-2 py-1.5 text-[10px] font-semibold"><option value="">+ link a sheet</option>{unlinked.map((character) => <option key={character.id} value={character.id}>{character.name}</option>)}</select>}{characters.length === 0 && <span className="text-xs text-[#8f6c63]">Create a character sheet to link it here.</span>}</div></Panel><div className="grid gap-5 xl:grid-cols-2"><CollectionPanel title="Sessions" kicker="what happened" items={campaign.sessions.map((session) => ({ id: session.id, name: `${session.date} · ${session.name}`, detail: session.detail }))} onAdd={addSession} onDelete={(id) => patch('sessions', campaign.sessions.filter((session) => session.id !== id))} placeholder="Session title" icon={History} testId="sessions" /><CollectionPanel title="NPCs" kicker="faces at the table" items={campaign.npcs} onAdd={(item) => addCollection('npcs', item)} onDelete={(id) => deleteCollection('npcs', id)} placeholder="NPC name" icon={CircleDot} testId="npcs" /><CollectionPanel title="Quests" kicker="open threads" items={campaign.quests} onAdd={(item) => addCollection('quests', item)} onDelete={(id) => deleteCollection('quests', id)} placeholder="Quest or promise" icon={Crosshair} testId="quests" /><CollectionPanel title="Locations" kicker="places with pressure" items={campaign.locations} onAdd={(item) => addCollection('locations', item)} onDelete={(id) => deleteCollection('locations', id)} placeholder="Location name" icon={Map} testId="locations" /><CollectionPanel title="Factions" kicker="who wants what" items={campaign.factions} onAdd={(item) => addCollection('factions', item)} onDelete={(id) => deleteCollection('factions', id)} placeholder="Faction name" icon={Shield} testId="factions" /><CollectionPanel title="Items" kicker="objects with a past" items={campaign.items} onAdd={(item) => addCollection('items', item)} onDelete={(id) => deleteCollection('items', id)} placeholder="Item name" icon={Sparkles} testId="items" /><CollectionPanel title="Lore" kicker="the connective tissue" items={campaign.lore} onAdd={(item) => addCollection('lore', item)} onDelete={(id) => deleteCollection('lore', id)} placeholder="Lore fragment" icon={BookOpen} testId="lore" /></div><Panel title="Campaign notes" kicker="the living page"><TextArea label="Notes" value={campaign.notes} onChange={(value) => patch('notes', value)} placeholder="Session recap, table agreements, clues still warm..." testId="textarea-campaign-notes" rows={7} /><div className="mt-3 flex items-center gap-2 text-[10px] text-[#77827b]"><Save size={13} className="text-[#768a32]" /> Saved locally as you type.</div></Panel></div>;
+  return <div className="grid min-w-0 gap-5"><Panel className="bg-[#ffe0d6]" title={campaign.name} kicker="selected campaign workspace" action={<button type="button" data-testid="button-delete-campaign" onClick={() => onDelete(campaign.id)} className="rounded-md border border-[#d0a59a] bg-[#f8f5ef] p-2 text-[#a53c27] hover:bg-[#ffcec0]" aria-label="Delete campaign"><Trash2 size={15} /></button>}><div className="grid gap-3 md:grid-cols-[1fr_1.6fr]"><Field label="Campaign name" value={campaign.name} onChange={(value) => patch('name', value)} placeholder="Campaign name" testId="input-campaign-name" /><Field label="Pitch / current arc" value={campaign.pitch} onChange={(value) => patch('pitch', value)} placeholder="What is moving right now?" testId="input-campaign-pitch" /></div><div className="mt-4 flex flex-wrap items-center gap-2"><span className="nf-mono text-[9px] uppercase tracking-[.12em] text-[#8f594c]">Player characters</span>{linked.map((character) => <button type="button" key={character.id} data-testid={`button-unlink-character-${character.id}`} onClick={() => patch('playerCharacters', campaign.playerCharacters.filter((id) => id !== id))} className="rounded bg-[#182129] px-2 py-1 text-[10px] font-bold text-[#f4f0e8]">{character.name} <X size={11} className="ml-1 inline" /></button>)}{unlinked.length > 0 && <select data-testid="select-link-character" value="" onChange={(event) => { if (event.target.value) patch('playerCharacters', [...campaign.playerCharacters, event.target.value]); }} className="rounded border border-[#caa197] bg-[#f8f5ef] px-2 py-1.5 text-[10px] font-semibold"><option value="">+ link a sheet</option>{unlinked.map((character) => <option key={character.id} value={character.id}>{character.name}</option>)}</select>}{characters.length === 0 && <span className="text-xs text-[#8f6c63]">Create a character sheet to link it here.</span>}</div></Panel><Panel className="bg-[#eef2d9]" title="Current rules references" kicker="canonical records stay separate from campaign notes"><div className="grid gap-4 lg:grid-cols-3"><ReferencePicker label="Creatures & NPC stat blocks" category="creature" ids={canonical.creatureIds ?? []} onChange={(ids) => patchCanonical('creatureIds', ids)} testId="campaign-creatures" /><ReferencePicker label="Items & treasure" category="magic-item" ids={canonical.itemIds ?? []} onChange={(ids) => patchCanonical('itemIds', ids)} testId="campaign-items" /><ReferencePicker label="Spells in the arc" category="spell" ids={canonical.spellIds ?? []} onChange={(ids) => patchCanonical('spellIds', ids)} testId="campaign-spells" /></div></Panel><div className="grid gap-5 xl:grid-cols-2"><CollectionPanel title="Sessions" kicker="what happened" items={campaign.sessions.map((session) => ({ id: session.id, name: `${session.date} · ${session.name}`, detail: session.detail }))} onAdd={addSession} onDelete={(id) => patch('sessions', campaign.sessions.filter((session) => session.id !== id))} placeholder="Session title" icon={History} testId="sessions" /><CollectionPanel title="NPCs" kicker="faces at the table" items={campaign.npcs} onAdd={(item) => addCollection('npcs', item)} onDelete={(id) => deleteCollection('npcs', id)} placeholder="NPC name" icon={CircleDot} testId="npcs" /><CollectionPanel title="Quests" kicker="open threads" items={campaign.quests} onAdd={(item) => addCollection('quests', item)} onDelete={(id) => deleteCollection('quests', id)} placeholder="Quest or promise" icon={Crosshair} testId="quests" /><CollectionPanel title="Locations" kicker="places with pressure" items={campaign.locations} onAdd={(item) => addCollection('locations', item)} onDelete={(id) => deleteCollection('locations', id)} placeholder="Location name" icon={Map} testId="locations" /><CollectionPanel title="Factions" kicker="who wants what" items={campaign.factions} onAdd={(item) => addCollection('factions', item)} onDelete={(id) => deleteCollection('factions', id)} placeholder="Faction name" icon={Shield} testId="factions" /><CollectionPanel title="Items" kicker="objects with a past" items={campaign.items} onAdd={(item) => addCollection('items', item)} onDelete={(id) => deleteCollection('items', id)} placeholder="Item name" icon={Sparkles} testId="items" /><CollectionPanel title="Lore" kicker="the connective tissue" items={campaign.lore} onAdd={(item) => addCollection('lore', item)} onDelete={(id) => deleteCollection('lore', id)} placeholder="Lore fragment" icon={BookOpen} testId="lore" /></div><Panel title="Campaign notes" kicker="the living page"><TextArea label="Notes" value={campaign.notes} onChange={(value) => patch('notes', value)} placeholder="Session recap, table agreements, clues still warm..." testId="textarea-campaign-notes" rows={7} /><div className="mt-3 flex items-center gap-2 text-[10px] text-[#77827b]"><Save size={13} className="text-[#768a32]" /> Saved locally as you type.</div></Panel></div>;
 }
 
 function WorldForge({ campaign, onUpdate, onNotify }: { campaign: Campaign | null; onUpdate: (id: string, patch: Partial<Campaign>) => void; onNotify: (message: string) => void }) {
