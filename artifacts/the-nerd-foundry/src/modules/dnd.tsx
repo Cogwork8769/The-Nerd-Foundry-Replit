@@ -190,7 +190,9 @@ const migrateForgeData = (value: ForgeData): ForgeData => ({
       backgroundId: character.compendium?.backgroundId,
       featIds: character.compendium?.featIds ?? idsForNames(character.feats, 'feat'),
       spellIds: character.compendium?.spellIds ?? idsForNames(character.spells, 'spell'),
-      equipmentIds: character.compendium?.equipmentIds ?? idsForNames([...character.inventory, ...character.equipment]),
+      equipmentIds: character.compendium?.equipmentIds ?? idsForNames(
+  [...character.inventory, ...character.equipment].map((item) => item.name)
+),
       featureIds: character.compendium?.featureIds ?? [],
     },
   })),
